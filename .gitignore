@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+checkpoints/
+data/
+runs/
+mlruns/
+mlartifacts/
+mlflow.db
+
+# papers and third-party code (3.6 GB, copyrighted, zips > GitHub's 100 MB limit)
+input_docs/

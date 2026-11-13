@@ -1,0 +1,114 @@
+[
+ {
+  "file": "00_Posnerb179_80test_target_left_box_left72.png",
+  "label": "Posner: cue left, target left (valid)",
+  "task": "posner",
+  "class": "posner_present",
+  "noise_sd": 17.85,
+  "source": "Posnerb179_80test.zip/target_left_box_left72.png"
+ },
+ {
+  "file": "01_Posnerb179_80test_target_right_box_right33.png",
+  "label": "Posner: cue right, target right (valid)",
+  "task": "posner",
+  "class": "posner_present",
+  "noise_sd": 17.85,
+  "source": "Posnerb179_80test.zip/target_right_box_right33.png"
+ },
+ {
+  "file": "02_Posnerb179_80test_target_right_box_left4.png",
+  "label": "Posner: cue left, target right (invalid)",
+  "task": "posner",
+  "class": "posner_present",
+  "noise_sd": 17.85,
+  "source": "Posnerb179_80test.zip/target_right_box_left4.png"
+ },
+ {
+  "file": "03_Posnerb179_80test_target_left_box_right25.png",
+  "label": "Posner: cue right, target left (invalid)",
+  "task": "posner",
+  "class": "posner_present",
+  "noise_sd": 17.85,
+  "source": "Posnerb179_80test.zip/target_left_box_right25.png"
+ },
+ {
+  "file": "04_Posnerb179_80test_target_absent_box_left193.png",
+  "label": "Posner: cue left, no target",
+  "task": "posner",
+  "class": "posner_absent",
+  "noise_sd": 17.85,
+  "source": "Posnerb179_80test.zip/target_absent_box_left193.png"
+ },
+ {
+  "file": "05_Posnerb179_80test_target_absent_box_right70.png",
+  "label": "Posner: cue right, no target",
+  "task": "posner",
+  "class": "posner_absent",
+  "noise_sd": 17.85,
+  "source": "Posnerb179_80test.zip/target_absent_box_right70.png"
+ },
+ {
+  "file": "06_VSss1angle9testn0_tc3_196.png",
+  "label": "Search: 1 box, target present",
+  "task": "search",
+  "class": "search_present",
+  "noise_sd": 30.6,
+  "source": "VSss1angle9testn0.zip/tc3_196.png"
+ },
+ {
+  "file": "07_VSss1angle9testn0_ntc1_9.png",
+  "label": "Search: 1 box, no target",
+  "task": "search",
+  "class": "search_absent",
+  "noise_sd": 30.6,
+  "source": "VSss1angle9testn0.zip/ntc1_9.png"
+ },
+ {
+  "file": "08_VSss8angle9testn0_tc1_503.png",
+  "label": "Search: 8 boxes, target present",
+  "task": "search",
+  "class": "search_present",
+  "noise_sd": 30.6,
+  "source": "VSss8angle9testn0.zip/tc1_503.png"
+ },
+ {
+  "file": "09_VSss8angle9testn0_ntc1_207.png",
+  "label": "Search: 8 boxes, no target",
+  "task": "search",
+  "class": "search_absent",
+  "noise_sd": 30.6,
+  "source": "VSss8angle9testn0.zip/ntc1_207.png"
+ },
+ {
+  "file": "10_cco75n0_cue_combloc_1_gt_1_15_46.png",
+  "label": "Contextual cueing: old layout, T tilted left",
+  "task": "context",
+  "class": "context_tilt_left",
+  "noise_sd": 22.95,
+  "source": "cco75n0.zip/cue_combloc_1_gt_1_15_46.png"
+ },
+ {
+  "file": "11_cco75n0_cue_combloc_7_gt_2_16_45.png",
+  "label": "Contextual cueing: old layout, T tilted right",
+  "task": "context",
+  "class": "context_tilt_right",
+  "noise_sd": 22.95,
+  "source": "cco75n0.zip/cue_combloc_7_gt_2_16_45.png"
+ },
+ {
+  "file": "12_ccn75n5test_cue_combloc_4_gt_1_7_66.png",
+  "label": "Contextual cueing: new layout, T tilted left",
+  "task": "context",
+  "class": "context_tilt_left",
+  "noise_sd": 17.34,
+  "source": "ccn75n5test.zip/cue_combloc_4_gt_1_7_66.png"
+ },
+ {
+  "file": "13_ccn75n5test_cue_combloc_9_gt_2_3_65.png",
+  "label": "Contextual cueing: new layout, T tilted right",
+  "task": "context",
+  "class": "context_tilt_right",
+  "noise_sd": 17.34,
+  "source": "ccn75n5test.zip/cue_combloc_9_gt_2_3_65.png"
+ }
+]

@@ -1,0 +1,10 @@
+# Install torch first with the CUDA index (see README); on Windows plain PyPI gives a CPU-only build.
+torch>=2.4
+numpy
+pandas
+scipy
+matplotlib
+opencv-python
+mlflow
+# notebooks
+jupyter

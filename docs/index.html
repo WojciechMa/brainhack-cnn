@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One small CNN, three attention tasks</title>
+<meta name="description" content="A small convolutional network trained on Posner cueing, visual search and contextual cueing, running live in the browser.">
+<style>
+  :root { color-scheme: dark; --bg: #111317; --card: #1a1d23; --ink: #e6e6e9; --muted: #9a9aa5; --line: #2f333b; --btn: #22262d; --track: #2a2e35; --accent: #f97316; --ok: #4ade80; --bad: #f87171; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+  main { max-width: 1240px; margin: 0 auto; padding: 24px 20px 48px; }
+  h1 { font-size: 1.9rem; margin: 0 0 8px; line-height: 1.2; }
+  h2 { font-size: 1.25rem; margin: 0 0 12px; }
+  h3 { font-size: 1rem; margin: 16px 0 6px; }
+  p { margin: 0 0 10px; }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); font-size: 0.92rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin: 16px 0; }
+  .try { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; }
+  .try > .card { margin: 0; }
+  #out { position: sticky; top: 12px; align-self: start; }  /* stays in view while drawing */
+  @media (max-width: 900px) { .try { grid-template-columns: minmax(0, 1fr); } #out { position: static; } }
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  button { font: inherit; font-size: 0.92rem; border: 1px solid var(--line); background: var(--btn); border-radius: 6px; padding: 5px 10px; cursor: pointer; color: var(--ink); }
+  button:hover { border-color: #565c68; }
+  button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .pane[hidden] { display: none; }
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+  .thumb { padding: 4px; display: flex; flex-direction: column; align-items: stretch; gap: 4px; font-size: 0.74rem; line-height: 1.25; text-align: left; }
+  .thumb img { width: 100%; aspect-ratio: 1; image-rendering: pixelated; border-radius: 3px; }
+  .thumb.on { outline: 2px solid var(--accent); outline-offset: 1px; background: var(--btn); color: var(--ink); border-color: var(--accent); }
+  .drawwrap { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; margin-top: 12px; }
+  #draw { width: 100%; max-width: 448px; aspect-ratio: 1; image-rendering: pixelated; touch-action: none; cursor: crosshair; border: 1px solid var(--line); border-radius: 4px; display: block; }
+  .tools { display: flex; flex-direction: column; gap: 8px; min-width: 170px; flex: 1; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .swatch { width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 2px solid var(--line); }
+  .swatch.on { border-color: var(--accent); outline: 2px solid var(--accent); }
+  label { font-size: 0.9rem; }
+  input[type=range] { width: 140px; vertical-align: middle; }
+  .answer { font-size: 1.35rem; font-weight: 600; margin: 4px 0 2px; }
+  .truth { font-size: 0.95rem; margin-bottom: 12px; }
+  .truth .ok { color: var(--ok); font-weight: 600; }
+  .truth .bad { color: var(--bad); font-weight: 600; }
+  .task { margin: 10px 0; }
+  .task-name { font-weight: 600; font-size: 0.95rem; }
+  .bar { display: grid; grid-template-columns: 130px minmax(0, 1fr) 52px; gap: 8px; align-items: center; font-size: 0.9rem; margin: 3px 0; }
+  .bar .track { height: 14px; background: var(--track); border-radius: 3px; overflow: hidden; }
+  .bar .fill { height: 100%; background: #6b7280; width: 0; transition: width 120ms; }
+  .bar.top .fill { background: var(--accent); }
+  .bar .pct { text-align: right; font-variant-numeric: tabular-nums; }
+  .layers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+  .layer canvas { width: 100%; image-rendering: pixelated; display: block; }
+  .layer .info { min-height: 1.4em; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #status { font-size: 0.9rem; }
+  progress { width: 220px; vertical-align: middle; }
+  #check { white-space: pre-wrap; font: 0.8rem/1.4 ui-monospace, Consolas, monospace; }
+  #lesans { font-size: 0.95rem; margin-bottom: 10px; color: var(--muted); }
+  .lesgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr)); gap: 24px; margin-top: 8px; }
+  .eff { margin: 10px 0 14px; }
+  .eff-name { font-weight: 600; font-size: 0.92rem; }
+  .ebar { display: grid; grid-template-columns: 130px minmax(0, 1fr) 118px; gap: 8px; align-items: center; font-size: 0.85rem; margin: 3px 0; }
+  .etrack { position: relative; height: 12px; background: var(--track); border-radius: 3px; }
+  .etrack .zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--muted); }
+  .etrack .v { position: absolute; top: 0; bottom: 0; background: #6b7280; border-radius: 2px; }
+  .etrack .v.les { background: var(--accent); }
+  .etrack .v.rnd { background: #a78bfa; }
+  .etrack .err { position: absolute; top: 5px; height: 2px; background: var(--ink); opacity: 0.7; }
+  .ebar .num { font-variant-numeric: tabular-nums; }
+  @media (max-width: 600px) { .ebar { grid-template-columns: 92px minmax(0, 1fr) 88px; gap: 6px; font-size: 0.78rem; } }
+  footer { font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>One small CNN, three attention tasks</h1>
+  <p>This page runs a small convolutional neural network in your browser. It was trained on three classic attention tasks at once (Posner cueing, visual search and contextual cueing) and is never told which task an image belongs to: it has to tell from the picture. Pick an image from the paper, draw your own or upload one, and see what the network answers and what each layer responds to.</p>
+  <p class="muted">Architecture and stimuli from Srivastava, Yang &amp; Eckstein (2024). Code, methods and results: <a href="https://github.com/WojciechMa/brainhack-cnn">github.com/WojciechMa/brainhack-cnn</a>.</p>
+  <p id="status">Loading the network (34 MB)… <progress id="prog" max="1" value="0"></progress></p>
+
+  <div class="try">
+    <section class="card">
+      <h2>Input</h2>
+      <div class="tabs" role="tablist">
+        <button data-pane="paper" class="on">Paper images</button>
+        <button data-pane="drawhelp">Draw</button>
+        <button data-pane="upload">Upload</button>
+      </div>
+      <div class="pane" id="pane-paper">
+        <div id="thumbs"></div>
+        <p class="muted" style="margin-top:10px">Images: the authors' example stimuli (Srivastava, Yang &amp; Eckstein, 2024, code release), cropped and resized to 224 × 224 as in training. They remain the authors' work. You can draw on any of them below.</p>
+      </div>
+      <div class="pane" id="pane-drawhelp" hidden>
+        <p>Draw on the image below with the pen, a straight line or a box outline. Try loading a paper image and erasing the target, or moving the cue box to the other side.</p>
+      </div>
+      <div class="pane" id="pane-upload" hidden>
+        <p><input type="file" id="file" accept="image/*"></p>
+        <p class="muted">The picture is turned to grey and fitted into 224 × 224. It stays in your browser: nothing is uploaded anywhere.</p>
+      </div>
+      <div class="drawwrap">
+        <canvas id="draw" width="224" height="224" aria-label="Input image; draw on it"></canvas>
+        <div class="tools">
+          <div class="row" id="toolbtns">
+            <button data-tool="pen" class="on">Pen</button>
+            <button data-tool="line">Line</button>
+            <button data-tool="box">Box</button>
+            <button data-tool="eraser">Eraser</button>
+          </div>
+          <div class="row" id="swatches" aria-label="Shade"></div>
+          <label>Size <input type="range" id="size" min="1" max="16" value="2"> <span id="sizev">2</span> px</label>
+          <div class="row"><button id="undo">Undo</button><button id="clear">Clear</button></div>
+          <label>Noise <input type="range" id="noise" min="0" max="50" step="0.5" value="18"> <span id="noisev"></span></label>
+          <div class="row"><button id="reseed">New noise</button></div>
+          <p class="muted" id="noisenote"></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="out">
+      <h2>The network's answer</h2>
+      <div class="answer" id="answer">…</div>
+      <div id="lesans" hidden></div>
+      <div class="truth" id="truth"></div>
+      <div id="bars"></div>
+      <p class="muted" id="agree"></p>
+    </section>
+  </div>
+
+  <section class="card" id="lesioncard">
+    <h2>Lesions: remove Dense units</h2>
+    <p class="muted">Switch off (set to zero) a group of the 600 Dense units. The groups are the units that add most to one attention effect, ranked by Shapley value on half of the test images, or random active units as a control. The answer above, the Dense grid below and the two panels here all use the lesioned network.</p>
+    <div class="row" id="lgroups">
+      <button data-g="none" class="on">Intact</button><button data-g="cue">Cueing units</button><button data-g="set_size">Set-size units</button><button data-g="context">Context units</button><button data-g="random">Random units</button>
+    </div>
+    <div class="row" id="lfracs" style="margin-top:8px" hidden>
+      Remove <button data-f="0.05">5 %</button><button data-f="0.1">10 %</button><button data-f="0.2" class="on">20 %</button> of the units
+      <button id="lredraw" hidden>New random draw</button>
+    </div>
+    <p id="lnote" style="margin-top:8px"></p>
+    <div class="lesgrid">
+      <div>
+        <h3>Our results on the test images</h3>
+        <div id="lres"></div>
+        <p class="muted" id="lresnote"></p>
+      </div>
+      <div>
+        <h3>Live trials in your browser</h3>
+        <p class="muted">Runs test images of the paper with new noise, the same number from every condition, and measures the three effects here. Once trials have run, changing the lesion rescores them at once.</p>
+        <div class="row"><button id="trun">Run trials</button><button id="treset">Reset</button><span class="muted" id="tstat"></span></div>
+        <div id="tres"></div>
+      </div>
+    </div>
+    <p class="muted">Effects in percentage points of AUC (the chance that the network rates a random target image above a random no-target image; for contextual cueing, a right-tilted T above a left-tilted one): Posner cueing = valid − invalid trials, set size = 1 − 8 boxes, contextual cueing = old − new layouts.</p>
+  </section>
+
+  <section class="card">
+    <h2>Inside the network</h2>
+    <p class="muted">Brighter = stronger response (scaled to the strongest unit in each layer). Hover over a map or a unit for its values.</p>
+    <div class="layers">
+      <div class="layer"><h3>What the network sees: 224 × 224 with noise</h3><canvas id="L-input"></canvas><div class="info"></div></div>
+      <div class="layer"><h3>Conv 1: 12 maps, 111 × 111</h3><canvas id="L-conv1"></canvas><div class="info" id="I-conv1"></div></div>
+      <div class="layer"><h3>Conv 2: 14 maps, 55 × 55</h3><canvas id="L-conv2"></canvas><div class="info" id="I-conv2"></div></div>
+      <div class="layer"><h3>Conv 3: 18 maps, 54 × 54</h3><canvas id="L-conv3"></canvas><div class="info" id="I-conv3"></div></div>
+      <div class="layer"><h3>Dense: 600 units</h3><canvas id="L-dense"></canvas><div class="info" id="I-dense"></div></div>
+    </div>
+    <p class="muted" id="timing"></p>
+  </section>
+
+  <section class="card" id="checkcard" hidden><h2>Self-test</h2><div id="check"></div></section>
+
+  <footer>
+    <p>Network: Conv(12, 3×3, stride 2) → Conv(14, 3×3, stride 2) → Conv(18, 2×2) → BatchNorm → Dense(600) → 6 outputs, the joint network of Srivastava, Yang &amp; Eckstein (2024), <i>Emergent human-like covert attention in feedforward convolutional neural networks</i>, Current Biology. Trained from scratch by us (seed 0 of 10). The Dense weights are stored with 8 bits each to keep the download small.</p>
+  </footer>
+</main>
+
+<script>
+"use strict";
+const S = 224;
+const READABLE = {
+  posner_absent: ["Posner", "no target"], posner_present: ["Posner", "target present"],
+  search_absent: ["Search", "no target"], search_present: ["Search", "target present"],
+  context_tilt_left: ["Contextual cueing", "T tilted left"], context_tilt_right: ["Contextual cueing", "T tilted right"],
+};
+const TASKNAME = { posner: "Posner cueing", search: "visual search", context: "contextual cueing" };
+const SHADES = [[0, "black"], [128, "background grey"], [150, "line grey (Posner targets)"], [179, "cue-box grey"], [240, "light grey (search boxes)"], [255, "white"]];
+const $ = id => document.getElementById(id);
+
+// ---------- network ----------
+let net = null;
+
+function f32(b64) {
+  const s = atob(b64), u = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+  return new Float32Array(u.buffer);
+}
+
+async function fetchBin(url, onChunk) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  const reader = r.body.getReader(), chunks = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value); n += value.length; onChunk(value.length);
+  }
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out.buffer;
+}
+
+async function loadNet() {
+  const meta = await (await fetch("model/meta.json")).json();
+  const d = meta.dense, nBlocks = d.in / d.block;
+  const total = d.in * d.out + d.out * nBlocks * 4;
+  let got = 0;
+  const tick = n => { got += n; $("prog").value = got / total; };
+  const [q, s] = await Promise.all([fetchBin("model/" + d.weights, tick), fetchBin("model/" + d.scales, tick)]);
+  const conv = ["conv1", "conv2", "conv3"].map(k => ({ ...meta.conv[k], w: f32(meta.conv[k].w), b: f32(meta.conv[k].b) }));
+  const n = {
+    meta, conv, bnScale: f32(meta.bn.scale), bnShift: f32(meta.bn.shift),
+    dense: { q: new Int8Array(q), s: new Float32Array(s), bias: f32(d.bias), nIn: d.in, nOut: d.out, block: d.block, nBlocks },
+    outW: f32(meta.out.w), outB: f32(meta.out.b), classes: meta.classes,
+  };
+  // the BatchNorm shift reaches the Dense layer whatever the image: add its contribution to the bias once
+  const C = n.bnShift.length, shift = new Float32Array(d.in);
+  for (let i = 0; i < d.in; i++) shift[i] = n.bnShift[i % C];
+  n.dense.base = denseSum(n.dense, shift, n.dense.bias);
+  return n;
+}
+
+function denseSum(D, x, start) {  // start + int8 weights . x, skipping zero inputs
+  const nO = D.nOut, q = D.q, s = D.s, B = D.block, acc = Float64Array.from(start), tmp = new Float32Array(nO);
+  for (let bl = 0; bl < D.nBlocks; bl++) {
+    const off = bl * B;
+    let any = false;
+    for (let k = 0; k < B; k++) {
+      const v = x[off + k];
+      if (v === 0) continue;
+      if (!any) { tmp.fill(0); any = true; }
+      const row = (off + k) * nO;
+      for (let j = 0; j < nO; j++) tmp[j] += q[row + j] * v;
+    }
+    if (any) { const sr = bl * nO; for (let j = 0; j < nO; j++) acc[j] += s[sr + j] * tmp[j]; }
+  }
+  return acc;
+}
+
+function conv2d(x, C, H, W, L) {
+  const { k, stride: st, out: O, w, b } = L;
+  const OH = Math.floor((H - k) / st) + 1, OW = Math.floor((W - k) / st) + 1;
+  const y = new Float32Array(O * OH * OW);
+  for (let o = 0; o < O; o++) {
+    const yo = o * OH * OW;
+    y.fill(b[o], yo, yo + OH * OW);
+    for (let c = 0; c < C; c++) for (let ky = 0; ky < k; ky++) for (let kx = 0; kx < k; kx++) {
+      const wv = w[((o * C + c) * k + ky) * k + kx];
+      for (let oy = 0; oy < OH; oy++) {
+        const xi = (c * H + oy * st + ky) * W + kx, yi = yo + oy * OW;
+        for (let ox = 0; ox < OW; ox++) y[yi + ox] += wv * x[xi + ox * st];
+      }
+    }
+  }
+  for (let i = 0; i < y.length; i++) if (y[i] < 0) y[i] = 0;
+  return { y, C: O, H: OH, W: OW };
+}
+
+function forward(x) {  // x: Float32Array 224*224 in 0-1
+  const c1 = conv2d(x, 1, S, S, net.conv[0]);
+  const c2 = conv2d(c1.y, c1.C, c1.H, c1.W, net.conv[1]);
+  const c3 = conv2d(c2.y, c2.C, c2.H, c2.W, net.conv[2]);
+  const { C, H, W } = c3, HW = H * W;
+  const flat = new Float32Array(C * HW);  // Keras (H, W, C) order; BatchNorm scale only, the shift is in D.base
+  for (let c = 0; c < C; c++) {
+    const sc = net.bnScale[c];
+    for (let p = 0; p < HW; p++) flat[p * C + c] = c3.y[c * HW + p] * sc;
+  }
+  const D = net.dense, z = denseSum(D, flat, D.base), r = new Float32Array(D.nOut);
+  for (let j = 0; j < D.nOut; j++) r[j] = z[j] > 0 ? z[j] : 0;
+  return { c1, c2, c3, dense: r, logits: readout(r, lesionMask), intact: readout(r, null) };
+}
+
+let lesionMask = null, lesionCount = 0;  // lesionMask[j] = 1: Dense unit j removed
+function readout(r, removed) {
+  const K = net.classes.length, n = r.length, logits = new Float64Array(K);
+  for (let i = 0; i < K; i++) {
+    let z = net.outB[i];
+    for (let j = 0; j < n; j++) if (!(removed && removed[j])) z += net.outW[i * n + j] * r[j];
+    logits[i] = z;
+  }
+  return logits;
+}
+
+function softmax(z) {
+  const m = Math.max(...z), e = Array.from(z, v => Math.exp(v - m)), s = e.reduce((a, b) => a + b, 0);
+  return e.map(v => v / s);
+}
+
+// ---------- input image ----------
+const base = new Uint8ClampedArray(S * S).fill(128);
+let undoStack = [], current = null, edited = false;
+let noiseSeed = 1, noiseField = null;
+
+function mulberry32(a) {
+  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+function makeNoise() {
+  const rnd = mulberry32(noiseSeed), n = new Float32Array(S * S);
+  for (let i = 0; i < n.length; i += 2) {
+    const u = rnd() || 1e-12, v = rnd(), m = Math.sqrt(-2 * Math.log(u));
+    n[i] = m * Math.cos(2 * Math.PI * v); n[i + 1] = m * Math.sin(2 * Math.PI * v);
+  }
+  noiseField = n;
+}
+function networkInput() {
+  const sd = +$("noise").value, x = new Float32Array(S * S);
+  for (let i = 0; i < x.length; i++) x[i] = Math.min(255, Math.max(0, Math.round(base[i] + sd * noiseField[i]))) / 255;
+  return x;
+}
+
+const dctx = $("draw").getContext("2d");
+function paintBase() {
+  const img = dctx.createImageData(S, S);
+  for (let i = 0; i < base.length; i++) { const v = base[i]; img.data.set([v, v, v, 255], i * 4); }
+  dctx.putImageData(img, 0, 0);
+}
+
+// ---------- drawing ----------
+let tool = "pen", shade = 255, drawing = false, start = null, last = null, snap = null;
+
+function disc(cx, cy, size, v) {
+  const r = (size - 1) / 2, x0 = Math.round(cx - r), y0 = Math.round(cy - r), n = Math.max(1, Math.round(size));
+  for (let dy = 0; dy < n; dy++) for (let dx = 0; dx < n; dx++) {
+    const ddx = dx - (n - 1) / 2, ddy = dy - (n - 1) / 2;
+    if (n > 2 && ddx * ddx + ddy * ddy > (n / 2) * (n / 2)) continue;
+    const x = x0 + dx, y = y0 + dy;
+    if (x >= 0 && x < S && y >= 0 && y < S) base[y * S + x] = v;
+  }
+}
+function segment(a, b, size, v) {
+  const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 2));
+  for (let i = 0; i <= steps; i++) disc(a.x + (b.x - a.x) * i / steps, a.y + (b.y - a.y) * i / steps, size, v);
+}
+function boxOutline(a, b, size, v) {
+  const p = [{ x: a.x, y: a.y }, { x: b.x, y: a.y }, { x: b.x, y: b.y }, { x: a.x, y: b.y }];
+  for (let i = 0; i < 4; i++) segment(p[i], p[(i + 1) % 4], size, v);
+}
+function pt(e) {
+  const r = $("draw").getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * S - 0.5, y: (e.clientY - r.top) / r.height * S - 0.5 };
+}
+function pushUndo() { undoStack.push(base.slice()); if (undoStack.length > 40) undoStack.shift(); }
+function changed() { edited = true; paintBase(); schedule(); }
+
+$("draw").addEventListener("pointerdown", e => {
+  e.preventDefault();
+  $("draw").setPointerCapture(e.pointerId);
+  pushUndo(); drawing = true; start = last = pt(e); snap = base.slice();
+  const size = +$("size").value, v = tool === "eraser" ? 128 : shade;
+  if (tool === "pen" || tool === "eraser") segment(start, start, size, v);
+  changed();
+});
+$("draw").addEventListener("pointermove", e => {
+  if (!drawing) return;
+  const p = pt(e), size = +$("size").value, v = tool === "eraser" ? 128 : shade;
+  if (tool === "pen" || tool === "eraser") { segment(last, p, size, v); last = p; }
+  else { base.set(snap); (tool === "line" ? segment : boxOutline)(start, p, size, v); }
+  changed();
+});
+const stop = () => { if (drawing) { drawing = false; schedule(); } };
+$("draw").addEventListener("pointerup", stop);
+$("draw").addEventListener("pointercancel", stop);
+
+for (const b of document.querySelectorAll("#toolbtns button")) b.onclick = () => {
+  tool = b.dataset.tool;
+  document.querySelectorAll("#toolbtns button").forEach(x => x.classList.toggle("on", x === b));
+};
+for (const [v, name] of SHADES) {
+  const b = document.createElement("button");
+  b.className = "swatch" + (v === shade ? " on" : ""); b.style.background = `rgb(${v},${v},${v})`;
+  b.title = `${name} (${v})`; b.setAttribute("aria-label", b.title);
+  b.onclick = () => { shade = v; document.querySelectorAll(".swatch").forEach(x => x.classList.toggle("on", x === b)); if (tool === "eraser") $("toolbtns").querySelector("[data-tool=pen]").click(); };
+  $("swatches").appendChild(b);
+}
+$("size").oninput = () => { $("sizev").textContent = $("size").value; };
+$("undo").onclick = () => { if (undoStack.length) { base.set(undoStack.pop()); changed(); } };
+$("clear").onclick = () => { pushUndo(); base.fill(128); current = null; changed(); };
+$("noise").oninput = () => { showNoise(); schedule(); };
+$("reseed").onclick = () => { noiseSeed++; makeNoise(); schedule(); };
+function showNoise() {
+  const v = +$("noise").value;
+  $("noisev").textContent = `${v} grey levels`;
+  const tr = current && Math.abs(v - current.noise_sd) < 0.26 ? ` (the training level for ${TASKNAME[current.task]})` : "";
+  $("noisenote").textContent = `Gaussian pixel noise, standard deviation ${v} of 255${tr}. Training used new noise for every image.`;
+}
+
+// ---------- sources ----------
+for (const b of document.querySelectorAll(".tabs button")) b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".pane").forEach(p => { p.hidden = p.id !== "pane-" + b.dataset.pane; });
+};
+
+function greyFromImage(img, fit) {
+  const c = document.createElement("canvas"); c.width = c.height = S;
+  const g = c.getContext("2d");
+  g.fillStyle = "rgb(128,128,128)"; g.fillRect(0, 0, S, S);
+  if (fit) {
+    const k = Math.min(S / img.width, S / img.height), w = img.width * k, h = img.height * k;
+    g.drawImage(img, (S - w) / 2, (S - h) / 2, w, h);
+  } else g.drawImage(img, 0, 0, S, S);
+  const d = g.getImageData(0, 0, S, S).data;
+  for (let i = 0; i < S * S; i++) base[i] = Math.round(0.299 * d[4 * i] + 0.587 * d[4 * i + 1] + 0.114 * d[4 * i + 2]);
+}
+
+let examples = [];
+async function loadExamples() {
+  examples = await (await fetch("stimuli/examples.json")).json();
+  const groups = {};
+  for (const ex of examples) (groups[ex.task] ||= []).push(ex);
+  const blurb = {
+    posner: "One box is the cue. Is the target (the more tilted line) present? On 80 % of target trials it is on the cued side.",
+    search: "Lines in 1 to 8 boxes. Is one of them the tilted target?",
+    context: "Which way is the T tilted? Old layouts were repeated in training; new ones were not.",
+  };
+  for (const [task, list] of Object.entries(groups)) {
+    const h = document.createElement("h3"); h.textContent = TASKNAME[task][0].toUpperCase() + TASKNAME[task].slice(1);
+    const p = document.createElement("p"); p.className = "muted"; p.textContent = blurb[task];
+    const grid = document.createElement("div"); grid.className = "thumbs";
+    for (const ex of list) {
+      const b = document.createElement("button"); b.className = "thumb";
+      b.innerHTML = `<img alt="" src="stimuli/${ex.file}"><span></span>`;
+      b.querySelector("span").textContent = ex.label.replace(/^[^:]+: /, "");
+      b.title = ex.label;
+      b.onclick = () => selectExample(ex, b);
+      ex.button = b;
+      grid.appendChild(b);
+    }
+    $("thumbs").append(h, p, grid);
+  }
+}
+function selectExample(ex) {
+  const img = new Image();
+  img.onload = () => {
+    pushUndo(); greyFromImage(img, false);
+    current = ex; edited = false;
+    document.querySelectorAll(".thumb").forEach(x => x.classList.toggle("on", x === ex.button));
+    $("noise").value = ex.noise_sd; showNoise();
+    paintBase(); schedule();
+  };
+  img.src = "stimuli/" + ex.file;
+}
+$("file").onchange = async () => {
+  const f = $("file").files[0];
+  if (!f) return;
+  try {
+    const bmp = await createImageBitmap(f);
+    pushUndo(); greyFromImage(bmp, true); current = null;
+    document.querySelectorAll(".thumb").forEach(x => x.classList.remove("on"));
+    changed();
+  } catch (err) { alert("Could not read that image: " + err.message); }
+};
+
+// ---------- rendering ----------
+const LUT = (() => {  // inferno-like
+  const stops = [[0, 0, 4], [40, 11, 84], [101, 21, 110], [159, 42, 99], [212, 72, 66], [245, 125, 21], [250, 193, 39], [252, 255, 164]];
+  const lut = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255 * (stops.length - 1), k = Math.min(stops.length - 2, Math.floor(t)), f = t - k;
+    for (let c = 0; c < 3; c++) lut[i * 3 + c] = stops[k][c] + (stops[k + 1][c] - stops[k][c]) * f;
+  }
+  return lut;
+})();
+function colour(img, p, v) { const i = Math.max(0, Math.min(255, Math.round(v * 255))) * 3; img.data[p] = LUT[i]; img.data[p + 1] = LUT[i + 1]; img.data[p + 2] = LUT[i + 2]; img.data[p + 3] = 255; }
+
+const GAP = 3, tiles = {};
+function drawMaps(id, a, cols) {
+  const { y, C, H, W } = a, rows = Math.ceil(C / cols), cv = $("L-" + id);
+  cv.width = cols * W + (cols - 1) * GAP; cv.height = rows * H + (rows - 1) * GAP;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(cv.width, cv.height);
+  let max = 1e-6;
+  for (const v of y) if (v > max) max = v;
+  const stats = [];
+  for (let c = 0; c < C; c++) {
+    const ox = (c % cols) * (W + GAP), oy = Math.floor(c / cols) * (H + GAP);
+    let m = 0, s = 0;
+    for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) {
+      const v = y[(c * H + yy) * W + xx];
+      if (v > m) m = v; s += v;
+      colour(img, ((oy + yy) * cv.width + ox + xx) * 4, v / max);
+    }
+    stats.push({ max: m, mean: s / (H * W) });
+  }
+  ctx.putImageData(img, 0, 0);
+  tiles[id] = { cols, H, W, C, stats };
+}
+function drawDense(r) {
+  const cols = 30, rows = Math.ceil(r.length / cols), cell = 8, cv = $("L-dense");
+  cv.width = cols * cell; cv.height = rows * cell;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(cv.width, cv.height);
+  let max = 1e-6;
+  for (const v of r) if (v > max) max = v;
+  for (let j = 0; j < r.length; j++) {
+    const ox = (j % cols) * cell, oy = Math.floor(j / cols) * cell, gone = lesionMask && lesionMask[j];
+    for (let yy = 1; yy < cell; yy++) for (let xx = 1; xx < cell; xx++) {
+      const p = ((oy + yy) * cv.width + ox + xx) * 4;
+      if (gone) img.data.set([56, 189, 248, 255], p); else colour(img, p, r[j] / max);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  tiles.dense = { r, cols, cell };
+  let live = 0;
+  for (let j = 0; j < r.length; j++) if (r[j] > 0 && !(lesionMask && lesionMask[j])) live++;
+  $("I-dense").textContent = `${live} of ${r.length} units active` + (lesionMask ? `, ${lesionCount} removed (blue)` : "");
+}
+function drawInput(x) {
+  const cv = $("L-input"); cv.width = cv.height = S;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(S, S);
+  for (let i = 0; i < x.length; i++) { const v = Math.round(x[i] * 255); img.data.set([v, v, v, 255], i * 4); }
+  ctx.putImageData(img, 0, 0);
+}
+for (const id of ["conv1", "conv2", "conv3"]) {
+  const cv = $("L-" + id);
+  cv.addEventListener("mousemove", e => {
+    const t = tiles[id]; if (!t) return;
+    const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * cv.width, y = (e.clientY - r.top) / r.height * cv.height;
+    const col = Math.floor(x / (t.W + GAP)), row = Math.floor(y / (t.H + GAP)), c = row * t.cols + col;
+    if (col >= t.cols || c >= t.C) return;
+    const s = t.stats[c];
+    $("I-" + id).textContent = `channel ${c}: max ${s.max.toFixed(2)}, mean ${s.mean.toFixed(3)}` + (s.max === 0 ? " (silent)" : "");
+  });
+}
+$("L-dense").addEventListener("mousemove", e => {
+  const t = tiles.dense; if (!t) return;
+  const cv = $("L-dense"), r = cv.getBoundingClientRect();
+  const col = Math.floor((e.clientX - r.left) / r.width * cv.width / t.cell), row = Math.floor((e.clientY - r.top) / r.height * cv.height / t.cell);
+  const j = row * t.cols + col;
+  if (col < t.cols && j < t.r.length) $("I-dense").textContent = `unit ${j}: ` + (lesionMask && lesionMask[j] ? "removed" : t.r[j].toFixed(3));
+});
+
+function drawOutput(logits, intact) {
+  const p = softmax(logits), cls = net.classes, top = p.indexOf(Math.max(...p));
+  const [task, ans] = READABLE[cls[top]];
+  $("answer").textContent = `${task}: ${ans} (${(p[top] * 100).toFixed(0)} %)`;
+  $("lesans").hidden = !lesionMask;
+  if (lesionMask) {
+    const q = softmax(intact), t = q.indexOf(Math.max(...q)), [it, ia] = READABLE[cls[t]];
+    $("lesans").textContent = `With ${lesionCount} Dense units removed. Intact network: ${it}: ${ia} (${(q[t] * 100).toFixed(0)} %).`;
+  }
+  if (current && !edited) {
+    const ok = current.class === cls[top], [t2, a2] = READABLE[current.class];
+    $("truth").innerHTML = `Correct answer: ${t2}, ${a2}. <span class="${ok ? "ok" : "bad"}">${ok ? "Right" : "Wrong"}</span>`;
+  } else $("truth").textContent = current ? "Edited image: no correct answer." : "Your own image: no correct answer.";
+  let html = "";
+  for (let k = 0; k < cls.length; k += 2) {
+    html += `<div class="task"><div class="task-name">${READABLE[cls[k]][0]}</div>`;
+    for (const i of [k, k + 1]) html += `<div class="bar${i === top ? " top" : ""}"><span>${READABLE[cls[i]][1]}</span><div class="track"><div class="fill" style="width:${(p[i] * 100).toFixed(1)}%"></div></div><span class="pct">${(p[i] * 100).toFixed(1)} %</span></div>`;
+    html += "</div>";
+  }
+  $("bars").innerHTML = html;
+}
+
+// ---------- lesions ----------
+let L = null;
+const lesion = { g: "none", f: 0.2, draw: 1 };
+const EFFNAME = ["Posner cueing (valid − invalid)", "Set size (1 − 8 boxes)", "Contextual cueing (old − new)"];
+const GROUPTEXT = { cue: "Posner cueing", set_size: "set-size", context: "contextual cueing" };
+const GROUPLABEL = { cue: "No cueing units", set_size: "No set-size units", context: "No context units", random: "No random units" };
+const pts = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
+
+function lesionUnits() {
+  if (lesion.g === "none") return [];
+  const k = Math.round(lesion.f * L.n_units);
+  if (lesion.g !== "random") return L.rank[lesion.g].slice(0, k);
+  const pool = L.live.slice(), rnd = mulberry32(1000 + lesion.draw);
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  return pool.slice(0, Math.min(k, pool.length));
+}
+function setLesion() {
+  const units = lesionUnits();
+  lesionMask = units.length ? new Uint8Array(L.n_units) : null;
+  for (const j of units) lesionMask[j] = 1;
+  lesionCount = units.length;
+  document.querySelectorAll("#lgroups button").forEach(b => b.classList.toggle("on", b.dataset.g === lesion.g));
+  document.querySelectorAll("#lfracs button[data-f]").forEach(b => b.classList.toggle("on", +b.dataset.f === lesion.f));
+  $("lfracs").hidden = lesion.g === "none";
+  $("lredraw").hidden = lesion.g !== "random";
+  $("lnote").textContent = lesion.g === "none" ? "No units removed."
+    : lesion.g === "random" ? `Removed ${units.length} of the ${L.live.length} units that are active on the test images, drawn at random (draw ${lesion.draw}).`
+    : `Removed the ${units.length} units that add most to the ${GROUPTEXT[lesion.g]} effect.`;
+  showResults(); showLive(); schedule();
+}
+
+function effBlock(name, items) {  // items: {label, v (AUC difference), cls, err (half-width), extra}
+  const LO = -10, HI = 25, pos = v => (Math.max(LO, Math.min(HI, v)) - LO) / (HI - LO) * 100;
+  let h = `<div class="eff"><div class="eff-name">${name}</div>`;
+  for (const it of items) {
+    const v = it.v * 100, a = pos(Math.min(0, v)), b = pos(Math.max(0, v));
+    let err = "";
+    if (it.err != null) { const e = it.err * 100; err = `<div class="err" style="left:${pos(v - e)}%;width:${pos(v + e) - pos(v - e)}%"></div>`; }
+    h += `<div class="ebar"><span>${it.label}</span><div class="etrack"><div class="v ${it.cls || ""}" style="left:${a}%;width:${b - a}%"></div>`
+      + `<div class="zero" style="left:${pos(0)}%"></div>${err}</div><span class="num">${pts(v)}${it.extra || ""}</span></div>`;
+  }
+  return h + "</div>";
+}
+
+function showResults() {
+  const f = String(lesion.f), T = L.this, M = L.mean, avg = v => ` (${pts(v * 100)})`;
+  $("lres").innerHTML = EFFNAME.map((name, e) => {
+    const items = [{ label: "Intact", v: T.intact[e], extra: avg(M.intact[e]) }];
+    if (lesion.g in GROUPTEXT) items.push({ label: GROUPLABEL[lesion.g], v: T.top[lesion.g][f][e], cls: "les", extra: avg(M.top[lesion.g][f][e]) });
+    if (lesion.g !== "none") items.push({ label: GROUPLABEL.random, v: T.random[f][e], cls: "rnd", extra: avg(M.random[f][e]) });
+    return effBlock(name, items);
+  }).join("");
+  $("lresnote").textContent = `This network on the test images that were not used for the ranking`
+    + (lesion.g === "none" ? "" : `, ${Math.round(lesion.f * 100)} % of the units removed; random units: mean of 20 draws`)
+    + `. In brackets: mean of ${L.n_runs} networks trained the same way.` + (lesion.g === "none" ? " Pick a group above to compare." : "");
+}
+
+// live trials: test images of the lesion half with fresh noise, one per condition per round
+const CONDTASK = c => (c < 6 ? 0 : c < 10 ? 1 : 2), MAX_TRIALS = 2800;
+let TR = null, trialLog = [], trialsRunning = false, trialToken = 0;
+
+async function loadTrials() {
+  $("tstat").textContent = "Loading test images…";
+  const info = await (await fetch("model/trials.json")).json();
+  let bytes = new Uint8Array(await fetchBin("model/trials.bin", () => {}));
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b)  // still gzipped (the server did not decode it)
+    bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+  if (bytes.length !== info.n_tiles * S * S) throw new Error("unexpected size of trials.bin");
+  const byCond = info.conditions.map(() => []);
+  for (const t of info.trials) byCond[t[1]].push(t);
+  const n = net.dense.nOut, wd = [[1, 0], [3, 2], [5, 4]].map(([p, q]) => ({
+    w: Float32Array.from({ length: n }, (_, j) => net.outW[p * n + j] - net.outW[q * n + j]), b: net.outB[p] - net.outB[q],
+  }));
+  TR = { tiles: bytes, byCond, wd, rnd: mulberry32(7) };
+}
+function trialInput(t, rnd) {
+  const off = t[0] * S * S, sd = t[2], x = new Float32Array(S * S), px = v => Math.min(255, Math.max(0, Math.round(v))) / 255;
+  for (let i = 0; i < x.length; i += 2) {
+    const u = rnd() || 1e-12, v = rnd(), m = sd * Math.sqrt(-2 * Math.log(u));
+    x[i] = px(TR.tiles[off + i] + m * Math.cos(2 * Math.PI * v));
+    x[i + 1] = px(TR.tiles[off + i + 1] + m * Math.sin(2 * Math.PI * v));
+  }
+  return x;
+}
+function setRunning(on) {
+  trialsRunning = on;
+  $("trun").textContent = on ? "Stop" : "Run trials";
+}
+async function runTrials() {
+  const my = ++trialToken;
+  setRunning(true);
+  if (!TR) {
+    try { await loadTrials(); } catch (err) { $("tstat").textContent = "Could not load the test images: " + err.message; setRunning(false); return; }
+  }
+  while (trialsRunning && my === trialToken && trialLog.length < MAX_TRIALS) {
+    for (let c = 0; c < TR.byCond.length && trialsRunning && my === trialToken; c++) {
+      const list = TR.byCond[c], t = list[Math.floor(TR.rnd() * list.length)];
+      trialLog.push({ c, r: forward(trialInput(t, TR.rnd)).dense });
+      await new Promise(res => setTimeout(res, 0));
+    }
+    showLive();
+  }
+  if (my === trialToken) { setRunning(false); showLive(); }
+}
+
+function aucSE(pos, neg) {  // AUC by pair counting (ties 0.5), standard error by Hanley & McNeil
+  let s = 0;
+  for (const a of pos) for (const b of neg) s += a > b ? 1 : a === b ? 0.5 : 0;
+  const n1 = pos.length, n0 = neg.length, A = s / (n1 * n0), q1 = A / (2 - A), q2 = 2 * A * A / (1 + A);
+  return [A, Math.sqrt(Math.max(0, (A * (1 - A) + (n1 - 1) * (q1 - A * A) + (n0 - 1) * (q2 - A * A)) / (n1 * n0)))];
+}
+function liveEffects(mask) {
+  const z = TR.byCond.map(() => []);
+  for (const { c, r } of trialLog) {
+    const { w, b } = TR.wd[CONDTASK(c)];
+    let s = b;
+    for (let j = 0; j < r.length; j++) if (r[j] > 0 && !(mask && mask[j])) s += w[j] * r[j];
+    z[c].push(s);
+  }
+  const [pvL, pvR, piL, piR, paL, paR, s1p, s1a, s8p, s8a, oL, oR, nL, nR] = z;
+  const diff = (as, bs) => {
+    const m = xs => xs.reduce((t, x) => t + x[0], 0) / xs.length, v = xs => xs.reduce((t, x) => t + x[1] ** 2, 0) / xs.length ** 2;
+    return [m(as) - m(bs), Math.sqrt(v(as) + v(bs))];
+  };
+  return [diff([aucSE(pvL, paL), aucSE(pvR, paR)], [aucSE(piL, paR), aucSE(piR, paL)]),
+    diff([aucSE(s1p, s1a)], [aucSE(s8p, s8a)]),
+    diff([aucSE(oR, oL)], [aucSE(nR, nL)])];
+}
+function showLive() {
+  const n = trialLog.length, per = TR ? Math.floor(n / TR.byCond.length) : 0;
+  if (!TR) return;
+  $("tstat").textContent = `${n} trials (${per} per condition)` + (trialsRunning ? "…" : n >= MAX_TRIALS ? ", the maximum: Reset to start again" : "");
+  if (per < 3) { $("tres").innerHTML = n ? "<p class=\"muted\">Waiting for 3 trials per condition…</p>" : ""; return; }
+  const I = liveEffects(null), X = lesionMask ? liveEffects(lesionMask) : null, ci = s => ` ± ${(1.96 * s * 100).toFixed(1)}`;
+  $("tres").innerHTML = EFFNAME.map((name, e) => effBlock(name, [
+    { label: "Intact", v: I[e][0], err: 1.96 * I[e][1], extra: ci(I[e][1]) },
+    ...(X ? [{ label: GROUPLABEL[lesion.g], v: X[e][0], err: 1.96 * X[e][1], extra: ci(X[e][1]), cls: lesion.g === "random" ? "rnd" : "les" }] : []),
+  ])).join("") + `<p class="muted">± about 95 % range from the number of trials. Intact and lesioned networks see the same trials.</p>`;
+}
+
+function setupLesions(doc) {
+  if (!doc) { $("lesioncard").hidden = true; return; }
+  L = doc;
+  document.querySelectorAll("#lgroups button").forEach(b => b.onclick = () => { lesion.g = b.dataset.g; setLesion(); });
+  document.querySelectorAll("#lfracs button[data-f]").forEach(b => b.onclick = () => { lesion.f = +b.dataset.f; setLesion(); });
+  $("lredraw").onclick = () => { lesion.draw++; setLesion(); };
+  $("trun").onclick = () => {
+    if (trialsRunning) setRunning(false);
+    else if (trialLog.length < MAX_TRIALS) runTrials();
+  };
+  $("treset").onclick = () => { setRunning(false); trialToken++; trialLog = []; $("tres").innerHTML = ""; $("tstat").textContent = ""; };
+  setLesion();
+}
+
+// ---------- update loop ----------
+let pending = false, lastRun = 0;
+function schedule() {
+  if (pending || !net) return;
+  pending = true;
+  setTimeout(run, drawing ? Math.max(0, 120 - (performance.now() - lastRun)) : 0);
+}
+function run() {
+  pending = false;
+  const t0 = performance.now(), x = networkInput(), a = forward(x), t1 = performance.now();
+  lastRun = t1;
+  drawInput(x); drawMaps("conv1", a.c1, 6); drawMaps("conv2", a.c2, 7); drawMaps("conv3", a.c3, 6); drawDense(a.dense); drawOutput(a.logits, a.intact);
+  $("timing").textContent = `Forward pass in your browser: ${(t1 - t0).toFixed(0)} ms.`;
+}
+
+async function selfTest() {
+  const cases = await (await fetch("model/check.json")).json();
+  const lines = [];
+  let worstInt8 = 0, worstTorch = 0, same = 0;
+  for (const c of cases) {
+    const s = atob(c.input), x = new Float32Array(S * S);
+    for (let i = 0; i < x.length; i++) x[i] = s.charCodeAt(i) / 255;
+    const z = forward(x).intact;
+    const d8 = Math.max(...z.map((v, i) => Math.abs(v - c.logits_int8[i]))), dt = Math.max(...z.map((v, i) => Math.abs(v - c.logits_torch[i])));
+    const agree = z.indexOf(Math.max(...z)) === c.logits_torch.indexOf(Math.max(...c.logits_torch));
+    worstInt8 = Math.max(worstInt8, d8); worstTorch = Math.max(worstTorch, dt); same += agree;
+    lines.push(`${c.file}: max |diff| vs Python int8 ${d8.toExponential(2)}, vs PyTorch ${dt.toFixed(4)}, same answer ${agree}`);
+  }
+  lines.unshift(`SELF-TEST ${cases.length} images: worst vs Python int8 ${worstInt8.toExponential(2)}, worst vs PyTorch ${worstTorch.toFixed(4)}, same answer ${same} of ${cases.length}`);
+  $("checkcard").hidden = false; $("check").textContent = lines.join("\n");
+  console.log(lines.join("\n"));
+}
+
+(async () => {
+  makeNoise(); paintBase(); showNoise();
+  try {
+    const ex = loadExamples(), les = fetch("model/lesions.json").then(r => r.json()).catch(() => null);
+    net = await loadNet();
+    await ex;
+    setupLesions(await les);
+    const a = net.meta.agreement;
+    $("status").textContent = "";
+    $("agree").textContent = `This browser copy stores the Dense weights in 8 bits. On the ${a.n} test images it gives the same answer as the original network on ${a.same}.`;
+    if (examples.length) selectExample(examples[0]); else schedule();
+    if (new URLSearchParams(location.search).has("check")) await selfTest();
+  } catch (err) {
+    $("status").textContent = location.protocol === "file:"
+      ? "The network cannot load from a local file. Serve the folder instead, e.g. python -m http.server -d docs, and open http://localhost:8000."
+      : "Could not load the network: " + err.message;
+    console.error(err);
+  }
+})();
+</script>
+</body>
+</html>
