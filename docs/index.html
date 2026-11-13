@@ -69,6 +69,11 @@
   .ebar .num { font-variant-numeric: tabular-nums; }
   @media (max-width: 600px) { .ebar { grid-template-columns: 92px minmax(0, 1fr) 88px; gap: 6px; font-size: 0.78rem; } }
   footer { font-size: 0.85rem; color: var(--muted); }
+  .guide > summary { cursor: pointer; }
+  .guide > summary h2 { display: inline; margin: 0; }
+  .guide-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 4px 24px; margin-top: 4px; }
+  .guide ul { margin: 0 0 8px; padding-left: 20px; }
+  .guide li { margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -76,6 +81,32 @@
   <h1>One small CNN, three attention tasks</h1>
   <p>This page runs a small convolutional neural network in your browser. It was trained on three classic attention tasks at once (Posner cueing, visual search and contextual cueing) and is never told which task an image belongs to: it has to tell from the picture. Pick an image from the paper, draw your own or upload one, and see what the network answers and what each layer responds to.</p>
   <p class="muted">Architecture and stimuli from Srivastava, Yang &amp; Eckstein (2024). Code, methods and results: <a href="https://github.com/WojciechMa/brainhack-cnn">github.com/WojciechMa/brainhack-cnn</a>.</p>
+  <details class="card guide">
+    <summary><h2>New here? What this page shows</h2></summary>
+    <div class="guide-body">
+      <div>
+        <h3>The three tasks</h3>
+        <ul>
+          <li><b>Posner cueing:</b> a cue box marks one side; is a target line present? The cue is predictive: the target appears on the cued side on 80 % of trials (valid). With such a cue people detect targets better on the cued side. With uninformative cues this benefit turns into a cost after about 300 ms (inhibition of return), which a network without a sense of time cannot show.</li>
+          <li><b>Visual search:</b> is the target present at one of the places marked by boxes? With more boxes (1 to 8) the search gets harder.</li>
+          <li><b>Contextual cueing:</b> which way is the target tilted? "Old" layouts were repeated during training, "new" ones were not. People find targets faster in repeated layouts.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>The network</h3>
+        <p>Three convolution layers (12, 14 and 18 feature maps), then 600 Dense units, then 6 outputs: target or no target for Posner and for search, tilted left or right for contextual cueing. It learned from noisy images, so the noise slider adds the same kind of noise to your image.</p>
+        <p>Like people, it shows all three attention effects: it does better after a valid cue, with fewer boxes and in old layouts.</p>
+      </div>
+      <div>
+        <h3>The panels</h3>
+        <ul>
+          <li><b>Answer:</b> the strongest of the six outputs and its probability. For the paper's images it also says whether the answer is right.</li>
+          <li><b>Inside the network:</b> what each layer responds to; brighter means stronger. Point at a map or unit to see its value.</li>
+          <li><b>Lesions:</b> switch off a group of Dense units and see how the three effects change. <i>Intact</i> is the whole network, <i>No … units</i> the network without the chosen group, <i>No random units</i> the same number of random units switched off, as a control. If the group row drops and the random row does not, those units carry that effect.</li>
+        </ul>
+      </div>
+    </div>
+  </details>
   <p id="status">Loading the network (34 MB)… <progress id="prog" max="1" value="0"></progress></p>
 
   <div class="try">
